@@ -2,7 +2,7 @@
 title: "reading_data_from_the_web"
 author: "Fenglin Xie"
 date: "2025-10-24"
-output: html_document
+output: github_document
 ---
 ```{r}
 library(tidyverse)
@@ -95,7 +95,7 @@ sw_html =
 ##only extract the features that we are interested in--CSS selector
 
 Now pull out elements of the html that I care about
-从网页抓取所需信息
+从网页抓取所需信息,使用SelectorGadget
 
 ```{r}
 title_vec =
