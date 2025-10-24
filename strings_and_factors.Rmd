@@ -33,6 +33,7 @@ load key package
 
 ```{r}
 library(rvest)
+library(p8105.datasets)
 ```
 
 ## Mostly use string vectors
@@ -161,6 +162,7 @@ vec_sex
 ```
 
 
+## Revisit NSDUH
 
 import NSDUH data from the web
 
@@ -170,30 +172,155 @@ url = "https://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2
 drug_use_html = read_html(url)
 ```
 
-This is an "easy" case
-
-
+现在的数据还非常不整洁，数据显示为chr类型，行头中的12+代表的是年龄，（2013-2014）代表的是年份
 ```{r}
-drug_use_html |> 
-  html_table()
-```
-
-一共15个table，若只要第一个table
-
-```{r}
-drug_use_html |> 
-  html_table() |> 
-  first()
-```
-
-table的底部备注会被放在table的第一行，现在我们想要去掉这一行
-##filter是针对variable，slice是针对rows
-
-```{r}
-ndsuh_df = 
+nsduh_df = 
   drug_use_html |> 
   html_table() |> 
   first() |> 
   slice(-1)
 ```
+
+
+Now do the tidying..
+##我不关心p-value，直接删掉他
+##我们不能像之前那样直接从一个具体的位置分开data（sep = 3）因为现在每个data要分开的地方都不一样，只能通过找具体的某个element来分开，这里使用的是“（”，而“（”是特殊符号，需要用“\\”来确认
+
+##`==`是针对于exact match（一对一的匹配），而`%in%`是对于collection of options做匹配
+```{r}
+marj_df =
+  nsduh_df |> 
+  select(-contains("P Value")) |> 
+  pivot_longer(
+    -State,
+    names_to = "age_year",
+    values_to = "percent"
+  ) |> 
+  separate(age_year, into = c("age", "year"), sep = "\\(") |> 
+  mutate(
+    year = str_remove(year, "\\)"),
+    percent = str_remove(percent, "[a-c]$"),
+    percent = as.numeric(percent)
+  ) |> 
+  filter(
+    !(State %in% c("Total U.S", "Northeast", "Midwest", "South", "West"))
+  )
+```
+
+
+Let's make a quick plot
+
+##`fct_reorder(State, percent)`把state按照percent的大小重新排序,方便对比年份趋势（exploratory analysis）
+```{r}
+marj_df |> 
+  filter(age == "12-17") |> 
+  mutate(State = fct_reorder(State, percent)) |> 
+  ggplot(aes(x = State, y = percent, color = year)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+## Restaurant Inspections
+
+```{r}
+data("rest_inspec")
+```
+
+This is a fun dataset
+
+
+```{r}
+rest_inspec |> 
+  group_by(boro, grade) |> 
+  summarize(n = n()) |> 
+  pivot_wider(
+    names_from = grade,
+    values_from = n
+  )
+```
+
+update the dataset
+
+```{r}
+rest_inspec =
+  rest_inspec |> 
+  filter(
+    grade %in% c("A", "B", "C"),
+    boro != 0)
+```
+
+
+Look for pizza places
+
+```{r}
+rest_inspec |> 
+  filter(str_detect(dba, "Pizza")) |>
+  group_by(boro, grade) |> 
+  summarize(n = n()) |> 
+  pivot_wider(
+    names_from = grade,
+    values_from = n
+  )
+```
+
+有些pizza店并没有检测到，因为很多披萨店的大小写和"Pizza"不符合，无法被检测到
+
+##detect any possible combinations of "pizza"
+##若写成[PpIiZzZzAa]，则会把包含这些字母的所有饭店包括进来，而不只是披萨店
+
+```{r}
+rest_inspec |> 
+  filter(str_detect(dba, "[Pp][Ii][Zz][Zz][Aa]")) |>
+  group_by(boro, grade) |> 
+  summarize(n = n()) |> 
+  pivot_wider(
+    names_from = grade,
+    values_from = n
+  )
+```
+
+
+Let's make this table a plot instead
+
+```{r}
+rest_inspec |> 
+  filter(str_detect(dba, "[Pp][Ii][Zz][Zz][Aa]")) |> 
+  ggplot(aes(x = boro, fill = grade)) +
+  geom_bar()
+```
+
+##`fct_infreq`把variable变成factor并按照frequency从大到小排列
+```{r}
+rest_inspec |> 
+  filter(str_detect(dba, "[Pp][Ii][Zz][Zz][Aa]")) |> 
+  mutate(boro = fct_infreq(boro)) |> 
+  ggplot(aes(x = boro, fill = grade)) +
+  geom_bar()
+```
+
+
+##变换variable名字
+##replace之后，variable又变回string，之后ggplot进行操作，再次将string重新变成factor按照首字母顺序排列，而不是按照frequency
+```{r}
+rest_inspec |> 
+  filter(str_detect(dba, "[Pp][Ii][Zz][Zz][Aa]")) |> 
+  mutate(boro = fct_infreq(boro),
+         boro = str_replace(boro, "Manhattan", "The City")) |> 
+  ggplot(aes(x = boro, fill = grade)) +
+  geom_bar()
+```
+
+##若想要保留frequency的改变，则使用`fct_recode`,这样就只是变换了variable的名字(而不是替换variable变成string),这样就保持了factor的形式.
+
+```{r}
+rest_inspec |> 
+  filter(str_detect(dba, "[Pp][Ii][Zz][Zz][Aa]")) |> 
+  mutate(boro = fct_infreq(boro),
+         boro = fct_recode(boro, "The City" = "Manhattan")) |> 
+  ggplot(aes(x = boro, fill = grade)) +
+  geom_bar()
+```
+
+
 
