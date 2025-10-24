@@ -1,0 +1,172 @@
+---
+title: "reading_data_from_the_web"
+author: "Fenglin Xie"
+date: "2025-10-24"
+output: html_document
+---
+```{r}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+##如何从网站上获取data
+
+load key packages
+
+```{r}
+library(rvest)
+library(httr)
+```
+
+import NSDUH data from the web
+##把网站上的所有信息都导入到R
+##如果网站没有了，那这些代码就跑不了了，为了防止这个情况，你需要把数据导出然后保存到本地
+```{r}
+url = "https://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm"
+
+drug_use_html = read_html(url)
+```
+
+This is an "easy" case
+
+##`html_table()`--获取网站上的所有table（most common CSS tag）
+
+####CSS(Cascading Style Sheets,层叠样式表)是网页设计中用于控制布局和外观的强大工具。tag（选择器）是CSS的核心,它允许我们精确地定位HTML元素并应用样式
+
+```{r}
+drug_use_html |> 
+  html_table()
+```
+
+一共15个table，若只要第一个table
+
+```{r}
+drug_use_html |> 
+  html_table() |> 
+  first()
+```
+
+指定需要第x个--`nth()`
+
+```{r}
+drug_use_html |> 
+  html_table() |> 
+  nth(7)
+```
+
+table的底部备注会被放在table的第一行，现在我们想要去掉这一行
+##filter是针对variable，slice是针对rows
+
+```{r}
+ndsuh_df = 
+  drug_use_html |> 
+  html_table() |> 
+  first() |> 
+  slice(-1)
+```
+
+现在的数据还非常不整洁，数据显示为chr类型，行头中的12+代表的是年龄，（2013-2014）代表的是年份
+
+slightly harder case
+
+```{r}
+url = "https://www.imdb.com/list/ls070150896/"
+
+sw_html =
+  read_html(url)
+```
+
+
+##only extract the features that we are interested in--CSS selector
+
+Now pull out elements of the html that I care about
+从网页抓取所需信息
+
+```{r}
+title_vec =
+  sw_html |> 
+  html_elements(".ipc-title-link-wrapper .ipc-title__text--reduced") |> 
+  html_text()
+
+metascore_vec =
+  sw_html |> 
+  html_elements(".metacritic-score-box") |> 
+  html_text()
+
+runtime_vec =
+  sw_html |> 
+  html_elements(".dli-title-metadata-item:nth-child(2)") |> 
+  html_text()
+
+sw_df =
+  tibble(
+    title = title_vec,
+    metascore = metascore_vec,
+    runtime = runtime_vec
+  )
+
+```
+
+## APIs
+
+### get data using an API
+
+Get the NYC water consumption dataset
+##通过HTTP package
+##"parsed"--猜一猜数据应该是什么形式，然后show it in that way
+
+```{r}
+nyc_water_df =
+  GET("https://data.cityofnewyork.us/resource/ia2d-e54m.csv") |> 
+  content("parsed")
+
+nyc_water_df |> 
+  ggplot(aes(x = year, y = nyc_consumption_million_gallons_per_day)) +
+  geom_point()
+```
+
+Access BRFSS
+
+##如果需要 app token，则去该网站找到token，按照一下操作即可
+
+##因为数据集实在太大了，我不想每次knit都重新跑一遍他(完成一遍full API call)，所以`eval=FALSE`
+
+```{r, eval=FALSE}
+brfss_df =
+  GET(
+    "https://chronicdata.cdc.gov/api/v3/views/acme-vg9e/query.csv",
+    query = list("app_token" = "复制你的token到这里")
+  ) |> 
+  content("parsed")
+```
+
+Look at Pokemon data
+##这些数据太complicated，无法快速使用“parsed”
+##`poke[[1]]`查看Pokemon的first element
+
+##需要进行很多操作去 organize the output into a dataframe
+
+```{r}
+poke = 
+  GET("http://pokeapi.co/api/v2/pokemon/1") |>
+  content()
+
+poke[[1]]
+```
+
+
