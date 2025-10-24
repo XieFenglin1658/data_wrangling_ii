@@ -1,0 +1,199 @@
+---
+title: "strings_and_factors"
+author: "Fenglin Xie"
+date: "2025-10-24"
+output: github_document
+---
+# strings
+
+##strings--可以是数字，可以是字母，反正就是一串东西
+##对于处理regular expression很有用，sometimes we do not know the exact match but we know the general pattern,like我想去掉data中的字母，但其实不同数据的字母位置可能不同，或者我不知道它在哪里，这个时候就可以用string进行操作
+
+```{r}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+load key package
+
+```{r}
+library(rvest)
+```
+
+## Mostly use string vectors
+先拿vector做例子，不建立dataframe
+##case matters-大写和小写不同
+```{r}
+
+##创建一个string
+string_vec = c("my", "name", "is", "Lin")
+
+##检测某一个item(类似filter)
+str_detect(string_vec, "Lin")
+
+##检测所有包含这个元素的item
+str_detect(string_vec, "i")
+
+##替换某一个item（类似mutate）
+str_replace(string_vec,"Lin", "Fenglin")
+
+##替换所有包含这个元素的item
+str_replace(string_vec, "i", "I")
+
+##remove the item
+str_replace(string_vec, "i", "")
+str_remove(string_vec, "i")
+```
+
+```{r}
+string_vec = c(
+  "i think we all rule for participating",
+  "i think i have been caught",
+  "i think this will be quite fun actually",
+  "it will be fun, i think"
+  )
+
+##检测包含i think的item
+str_detect(string_vec, "i think")
+
+##检测以i think开头的item
+str_detect(string_vec, "^i think")
+
+##检测以i think结尾的item
+str_detect(string_vec, "i think$")
+
+
+##去掉以i think结尾的item的i think部分
+str_remove(string_vec, "i think$")
+
+```
+
+
+pumpkin themed example
+##大小写和有无空格matters！！
+
+```{r}
+string_vec = c(
+  "Time for a Pumpkin Spice Latte!",
+  "went to the #pumpkinpatch last weekend",
+  "Pumpkin Pie is obviously the best pie",
+  "SMASHING PUMPKINS -- LIVE IN CONCERT!!"
+  )
+
+str_detect(string_vec, "pumpkin")
+
+##检测包含大写p和小写p的item
+str_detect(string_vec, "[Pp]umpkin")
+
+```
+
+
+Let's get a bit more complicated
+
+```{r}
+string_vec = c(
+  '7th inning stretch',
+  '1st half soon to begin. Texas won the toss.',
+  'she is 5 feet 4 inches tall',
+  '3AM - cant sleep :('
+  )
+
+##包含1234567890这些数字的item
+str_detect(string_vec, "[1234567890]")
+str_detect(string_vec, "[0-9]")
+
+##包含0-9这些数字并且后面紧跟着大写字母A-Z的（中间无空格）
+str_detect(string_vec, "[1234567890][A-Z]")
+
+##包含0-9这些数字并且后面紧跟着字母A-Z的,无论大小写（中间无空格）
+str_detect(string_vec, "[1234567890][a-zA-Z]")
+```
+
+
+```{r}
+string_vec = c(
+  'Its 7:11 in the evening',
+  'want to go to 7-11?',
+  'my flight is AA711',
+  'NetBios: scanning ip 203.167.114.66'
+  )
+
+##检测7后面跟着某个element然后后面再跟着一个1
+##`.`代表的是anything matches this，是一个特殊符号
+str_detect(string_vec,"7.1" )
+
+##而如果真的想detect这个element`.`,则需要在前面加上\\
+##Some characters are “special”. These include [ and ], ( and ), and .. If you want to search for these, you have to indicate they’re special using \. Unfortunately, \ is also special, so things get weird.
+str_detect(string_vec,"7\\.1" )
+
+
+```
+
+
+## Factors
+
+##和string不同，string就是copy了所有的内容，包括引号，而factor是不包括引号的，而且会展示level（in order：第一个代表female，第二个代表male）
+```{r}
+vec_sex = factor(c("male", "male", "female", "female"))
+vec_sex
+
+##把这个factor变成numeric的形式
+as.numeric(vec_sex)
+
+## level的order默认会按照字母排序，如果想要变成按照数据本身顺序排序的话就用`fct_inorder`
+vec_sex = fct_inorder(vec_sex)
+vec_sex
+```
+
+
+
+import NSDUH data from the web
+
+```{r}
+url = "https://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm"
+
+drug_use_html = read_html(url)
+```
+
+This is an "easy" case
+
+
+```{r}
+drug_use_html |> 
+  html_table()
+```
+
+一共15个table，若只要第一个table
+
+```{r}
+drug_use_html |> 
+  html_table() |> 
+  first()
+```
+
+table的底部备注会被放在table的第一行，现在我们想要去掉这一行
+##filter是针对variable，slice是针对rows
+
+```{r}
+ndsuh_df = 
+  drug_use_html |> 
+  html_table() |> 
+  first() |> 
+  slice(-1)
+```
+
